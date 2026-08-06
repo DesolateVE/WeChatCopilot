@@ -24,9 +24,15 @@ local-data/              本机数据库、密钥和导出物（禁止提交）
 项目使用 xmake、C++20、WCDB、cpp-httplib 和 nlohmann-json：
 
 ```powershell
+git submodule update --init --recursive
+cmake -S .deps/wcdb/src -B .deps/wcdb/src/build -A x64 -DWCDB_CPP=ON -DWCDB_ZSTD=ON
+cmake --build .deps/wcdb/src/build --config Release --parallel
 xmake f -m release
 xmake
 ```
+
+首次克隆也可使用 `git clone --recurse-submodules`。仓库只记录固定的 WCDB commit；
+WCDB、SQLCipher 和 Zstd 源码及其本机构建产物不会复制到本仓库。
 
 运行前通过环境变量提供本机数据，不在源码中保存密钥：
 

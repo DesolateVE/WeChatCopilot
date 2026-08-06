@@ -1,5 +1,6 @@
 # Build and dependency state
-.deps/
+.deps/*
+!.deps/wcdb
 .xmake/
 build/
 compile_commands.json
