@@ -1,0 +1,24 @@
+{
+  "version": 6,
+  "configurePresets": [
+    {
+      "name": "msvc-x64-vcpkg",
+      "displayName": "MSVC x64 + vcpkg",
+      "generator": "Visual Studio 18 2026",
+      "architecture": "x64",
+      "binaryDir": "${sourceDir}/build/wcdb-reader-vcpkg",
+      "cacheVariables": {
+        "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
+        "VCPKG_TARGET_TRIPLET": "x64-windows-static-md"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "release-vcpkg",
+      "configurePreset": "msvc-x64-vcpkg",
+      "configuration": "Release",
+      "jobs": 12
+    }
+  ]
+}

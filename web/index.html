@@ -1,0 +1,375 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Data Workspace</title>
+  <style>
+        :root {
+            color-scheme: light;
+            --accent: #16a085;
+            --accent-strong: #0f766e;
+            --accent-soft: #e8f6f2;
+            --chrome: #f3f5f6;
+            --panel: #ffffff;
+            --line: #d9dee2;
+            --line-soft: #e9edef;
+            --text: #263238;
+            --muted: #65727a;
+            --selected: #dff3ed;
+        }
+        * { box-sizing: border-box; }
+        html, body { height: 100%; }
+        body { margin: 0; overflow: hidden; background: var(--chrome); color: var(--text); font: 13px/1.45 "Segoe UI", "Microsoft YaHei", sans-serif; }
+        button, input, select { font: inherit; }
+        button { color: inherit; }
+        .app { display: grid; grid-template-rows: 46px minmax(0, 1fr) 26px; height: 100vh; }
+        .topbar { display: flex; align-items: center; gap: 18px; padding: 0 14px; background: #fff; border-bottom: 1px solid var(--line); }
+        .brand { display: flex; align-items: center; gap: 9px; min-width: 224px; font-weight: 650; }
+        .brand-mark { display: grid; place-items: center; width: 25px; height: 25px; border-radius: 5px; background: var(--accent); color: #fff; font-size: 11px; }
+        .toolbar { display: flex; align-items: center; gap: 3px; height: 100%; }
+        .tool-button, .icon-button { border: 0; background: transparent; cursor: pointer; }
+        .tool-button { display: flex; align-items: center; gap: 7px; height: 34px; padding: 0 10px; border-radius: 4px; }
+        .tool-button:hover, .icon-button:hover { background: #edf1f2; }
+        .tool-icon { color: var(--accent-strong); font-size: 17px; line-height: 1; }
+        .connection { margin-left: auto; display: flex; align-items: center; gap: 7px; color: var(--muted); }
+        .connection-dot { width: 7px; height: 7px; border-radius: 50%; background: #22a06b; box-shadow: 0 0 0 3px #dff4e9; }
+        .workspace { display: grid; grid-template-columns: 248px minmax(0, 1fr); min-height: 0; }
+        .sidebar { display: grid; grid-template-rows: auto auto auto minmax(0, 1fr); min-height: 0; background: #f8f9fa; border-right: 1px solid var(--line); }
+        .sidebar-title { display: flex; align-items: center; justify-content: space-between; height: 38px; padding: 0 10px 0 13px; border-bottom: 1px solid var(--line); font-weight: 600; }
+        .icon-button { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 4px; font-size: 17px; }
+        .database-picker { padding: 9px 10px; border-bottom: 1px solid var(--line-soft); }
+        .database-picker select { width: 100%; height: 30px; padding: 0 7px; border: 1px solid #cdd4d8; border-radius: 4px; outline: none; background: #fff; color: var(--text); }
+        .database-picker select:focus { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(22, 160, 133, .12); }
+        .search { position: relative; padding: 9px 10px; border-bottom: 1px solid var(--line-soft); }
+        .search span { position: absolute; left: 19px; top: 15px; color: #8a969c; }
+        .search input { width: 100%; height: 29px; padding: 0 9px 0 28px; border: 1px solid #cdd4d8; border-radius: 4px; outline: none; background: #fff; color: var(--text); }
+        .search input:focus { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(22, 160, 133, .12); }
+        .tree { min-height: 0; overflow: auto; padding: 6px 0 16px; }
+        .tree-root { display: flex; align-items: center; gap: 7px; height: 30px; padding: 0 12px; font-weight: 600; }
+        .tree-section { display: flex; align-items: center; gap: 7px; height: 28px; padding: 0 12px 0 25px; color: #445159; }
+        .count { margin-left: auto; color: #8b969c; font-size: 11px; }
+        .table-list { display: flex; flex-direction: column; }
+        .table-item { display: flex; align-items: center; gap: 8px; width: 100%; height: 29px; padding: 0 10px 0 43px; border: 0; background: transparent; text-align: left; cursor: pointer; white-space: nowrap; }
+        .table-item:hover { background: #edf1f2; }
+        .table-item.active { background: var(--selected); color: #075e54; }
+        .table-glyph { color: #718087; font-size: 11px; }
+        .main { display: grid; grid-template-rows: 39px 43px minmax(0, 1fr) 39px; min-width: 0; min-height: 0; background: #fff; }
+        .tabs { display: flex; align-items: end; padding-left: 8px; background: #eef1f2; border-bottom: 1px solid var(--line); }
+        .tab { display: flex; align-items: center; gap: 8px; min-width: 180px; max-width: 320px; height: 34px; padding: 0 13px; background: #fff; border: 1px solid var(--line); border-bottom-color: #fff; border-radius: 5px 5px 0 0; }
+        .tab-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .tab-close { margin-left: auto; color: #879299; }
+        .data-toolbar { display: flex; align-items: center; gap: 5px; padding: 0 10px; border-bottom: 1px solid var(--line); }
+        .data-toolbar .tool-button { height: 30px; }
+        .divider { width: 1px; height: 19px; margin: 0 4px; background: var(--line); }
+        .meta { margin-left: auto; color: var(--muted); white-space: nowrap; }
+        .grid-wrap { position: relative; min-width: 0; min-height: 0; overflow: auto; background: #fff; }
+        table { min-width: 100%; width: max-content; border-spacing: 0; table-layout: fixed; font-size: 12px; }
+        th, td { height: 31px; max-width: 380px; padding: 0 10px; overflow: hidden; border-right: 1px solid var(--line-soft); border-bottom: 1px solid var(--line-soft); text-align: left; text-overflow: ellipsis; white-space: nowrap; }
+        th { position: sticky; top: 0; z-index: 2; min-width: 140px; background: #f2f4f5; border-bottom-color: #cfd6da; color: #3d4a51; font-weight: 600; }
+        .pk-badge { display: inline-block; margin-left: 6px; padding: 1px 4px; border-radius: 3px; background: #fff1c2; color: #855900; font-size: 10px; font-weight: 700; line-height: 16px; vertical-align: middle; }
+        th:first-child, td:first-child { position: sticky; left: 0; min-width: 48px; width: 48px; max-width: 48px; padding: 0; background: #f6f7f8; color: #7a878e; text-align: center; }
+        th:first-child { z-index: 3; }
+        tbody tr:hover td { background: #f1faf7; }
+        tbody tr:hover td:first-child { background: #e8f4f0; }
+        td.zstd-decompressed { background: #fff4cc; box-shadow: inset 0 0 0 2px #c98a00; color: #614300; font-weight: 700; }
+        tbody tr:hover td.zstd-decompressed { background: #ffedaa; }
+        td.blob-hex { background: #eaf4ff; box-shadow: inset 0 0 0 2px #4386c6; color: #174f7f; font-family: Consolas, monospace; }
+        tbody tr:hover td.blob-hex { background: #d9ebff; }
+        .empty { position: absolute; inset: 70px 0 auto; display: none; color: var(--muted); text-align: center; }
+        .pager { display: flex; align-items: center; gap: 5px; padding: 0 10px; border-top: 1px solid var(--line); background: #fafbfb; }
+        .page-button { display: grid; place-items: center; width: 27px; height: 27px; border: 1px solid transparent; border-radius: 4px; background: transparent; cursor: pointer; }
+        .page-button:hover:not(:disabled) { border-color: #cbd3d7; background: #fff; }
+        .page-button:disabled { color: #b7c0c5; cursor: default; }
+        .page-number { width: 42px; height: 26px; border: 1px solid #cbd3d7; border-radius: 4px; background: #fff; text-align: center; }
+        .page-size { height: 27px; margin-left: auto; border: 1px solid #cbd3d7; border-radius: 4px; background: #fff; }
+        .statusbar { display: flex; align-items: center; gap: 16px; padding: 0 10px; background: #edf1f2; border-top: 1px solid #d5dbde; color: #647178; font-size: 11px; }
+        .statusbar .ready { color: #147d64; }
+        @media (max-width: 760px) {
+            .workspace { grid-template-columns: 190px minmax(0, 1fr); }
+            .brand { min-width: auto; }
+            .tool-label, .connection span:last-child { display: none; }
+            .topbar { gap: 6px; }
+            .table-item { padding-left: 30px; }
+            .meta { display: none; }
+        }
+  </style>
+</head>
+<body>
+    <div class="app">
+        <header class="topbar">
+            <div class="brand"><span class="brand-mark">DB</span><span>Data Workspace</span></div>
+            <nav class="toolbar" aria-label="主工具栏">
+                <button id="refreshBtn" class="tool-button" title="刷新数据库"><span class="tool-icon">↻</span><span class="tool-label">刷新</span></button>
+                <button class="tool-button" disabled title="只读连接"><span class="tool-icon">⌁</span><span class="tool-label">只读模式</span></button>
+            </nav>
+            <div class="connection"><span class="connection-dot"></span><span id="connectionName">正在扫描数据库...</span></div>
+        </header>
+        <div class="workspace">
+            <aside class="sidebar">
+                <div class="sidebar-title"><span>对象</span><button id="sideRefreshBtn" class="icon-button" title="刷新对象">↻</button></div>
+                <label class="database-picker"><select id="databaseSelect" aria-label="选择数据库"></select></label>
+                <label class="search"><span>⌕</span><input id="tableSearch" type="search" placeholder="筛选表" autocomplete="off"></label>
+                <div class="tree">
+                    <div class="tree-root"><span>▾</span><span id="databaseName">未选择数据库</span></div>
+                    <div class="tree-section"><span>▾</span><span>表</span><span id="tableCount" class="count">0</span></div>
+                    <div id="tableList" class="table-list"></div>
+                </div>
+            </aside>
+            <main class="main">
+                <div class="tabs">
+                    <div class="tab"><span class="table-glyph">▦</span><span id="tableTitle" class="tab-name">选择一个表</span><span class="tab-close">×</span></div>
+                </div>
+                <div class="data-toolbar">
+                    <button id="reloadDataBtn" class="tool-button" title="重新加载数据"><span class="tool-icon">↻</span><span>刷新数据</span></button>
+                    <span class="divider"></span>
+                    <button class="tool-button" disabled title="当前连接为只读"><span class="tool-icon">＋</span><span>新增行</span></button>
+                    <button class="tool-button" disabled title="当前连接为只读"><span class="tool-icon">−</span><span>删除行</span></button>
+                    <span id="tableMeta" class="meta">请选择左侧数据表</span>
+                </div>
+                <div class="grid-wrap">
+                    <table id="dataTable">
+                        <thead><tr id="tableHeader"><th>#</th></tr></thead>
+                        <tbody id="tableBody"></tbody>
+                    </table>
+                    <div id="emptyState" class="empty">此表没有数据</div>
+                </div>
+                <div class="pager">
+                    <button id="firstBtn" class="page-button" title="第一页">|‹</button>
+                    <button id="prevBtn" class="page-button" title="上一页">‹</button>
+                    <span>第</span><input id="pageInput" class="page-number" inputmode="numeric" value="1" aria-label="页码"><span id="pageTotal">/ 1 页</span>
+                    <button id="nextBtn" class="page-button" title="下一页">›</button>
+                    <button id="lastBtn" class="page-button" title="最后一页">›|</button>
+                    <select id="pageSize" class="page-size" aria-label="每页行数">
+                        <option value="20">20 行/页</option>
+                        <option value="50">50 行/页</option>
+                        <option value="100">100 行/页</option>
+                    </select>
+        </div>
+            </main>
+        </div>
+        <footer class="statusbar"><span id="statusText" class="ready">就绪</span><span id="fieldCount">0 个字段</span><span id="rowCount">0 行</span></footer>
+  </div>
+  <script>
+        const state = { databases: [], database: '', tables: [], selected: '', page: 1, pageSize: 20, totalRows: 0, loading: false };
+    const databaseSelect = document.getElementById('databaseSelect');
+    const tableList = document.getElementById('tableList');
+    const tableTitle = document.getElementById('tableTitle');
+    const tableMeta = document.getElementById('tableMeta');
+    const tableHeader = document.getElementById('tableHeader');
+    const tableBody = document.getElementById('tableBody');
+    const prevBtn = document.getElementById('prevBtn');
+    const nextBtn = document.getElementById('nextBtn');
+        const firstBtn = document.getElementById('firstBtn');
+        const lastBtn = document.getElementById('lastBtn');
+        const pageInput = document.getElementById('pageInput');
+        const pageTotal = document.getElementById('pageTotal');
+        const emptyState = document.getElementById('emptyState');
+        const statusText = document.getElementById('statusText');
+
+        function totalPages() {
+            return Math.max(1, Math.ceil(state.totalRows / state.pageSize));
+        }
+
+    function renderTableList() {
+      tableList.innerHTML = '';
+            const filter = document.getElementById('tableSearch').value.trim().toLocaleLowerCase();
+            state.tables.filter((name) => name.toLocaleLowerCase().includes(filter)).forEach((name) => {
+        const button = document.createElement('button');
+        button.className = `table-item${name === state.selected ? ' active' : ''}`;
+                const icon = document.createElement('span');
+                icon.className = 'table-glyph';
+                icon.textContent = '▦';
+                const label = document.createElement('span');
+                label.textContent = name;
+                button.append(icon, label);
+                button.title = name;
+        button.addEventListener('click', () => {
+          state.selected = name;
+          state.page = 1;
+          renderTableList();
+          loadTable(name, 1);
+        });
+        tableList.appendChild(button);
+      });
+    }
+
+        function renderDatabases() {
+            databaseSelect.innerHTML = '';
+            state.databases.forEach((database) => {
+                const option = document.createElement('option');
+                option.value = database;
+                option.textContent = database;
+                option.selected = database === state.database;
+                databaseSelect.appendChild(option);
+            });
+            document.getElementById('databaseName').textContent = state.database || '未选择数据库';
+            document.getElementById('connectionName').textContent = state.database ? `${state.database} · 已连接` : '未找到数据库';
+        }
+
+        async function loadDatabases() {
+            statusText.textContent = '正在扫描数据库...';
+            statusText.className = '';
+            try {
+                const response = await fetch('/api/databases');
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                const data = await response.json();
+                state.databases = data.databases || [];
+                if (!state.databases.includes(state.database)) {
+                    state.database = state.databases[0] || '';
+                    state.selected = '';
+                }
+                renderDatabases();
+                if (state.database) {
+                    await loadTables();
+                } else {
+                    state.tables = [];
+                    renderTableList();
+                    statusText.textContent = '目录中没有可浏览的数据库';
+                }
+            } catch (error) {
+                statusText.textContent = `扫描失败：${error.message}`;
+                statusText.className = '';
+            }
+        }
+
+    async function loadTables() {
+            if (!state.database) return;
+            statusText.textContent = '正在读取数据库对象...';
+            statusText.className = '';
+            try {
+                const response = await fetch(`/api/tables?database=${encodeURIComponent(state.database)}`);
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                const data = await response.json();
+                state.tables = data.tables || [];
+                document.getElementById('tableCount').textContent = state.tables.length;
+                if (!state.tables.includes(state.selected)) {
+                    state.selected = state.tables[0] || '';
+                    state.page = 1;
+                }
+                renderTableList();
+                if (state.selected) {
+                    await loadTable(state.selected, state.page);
+                } else {
+                    statusText.textContent = '数据库中没有可浏览的表';
+                }
+            } catch (error) {
+                statusText.textContent = `加载失败：${error.message}`;
+                statusText.className = '';
+      }
+    }
+
+    async function loadTable(tableName, page) {
+            if (!tableName || state.loading) return;
+            state.loading = true;
+      state.selected = tableName;
+      state.page = page;
+            statusText.textContent = `正在读取 ${tableName}...`;
+            statusText.className = '';
+            try {
+                const response = await fetch(`/api/tables/${encodeURIComponent(tableName)}?database=${encodeURIComponent(state.database)}&page=${page}&pageSize=${state.pageSize}`);
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                const payload = await response.json();
+                state.page = payload.page;
+                state.totalRows = payload.totalRows;
+                                const columnTypes = payload.columnTypes || [];
+                                const columnPrimaryKeys = payload.columnPrimaryKeys || [];
+                                const primaryKeyCount = columnPrimaryKeys.filter((order) => order > 0).length;
+                tableTitle.textContent = tableName;
+                tableMeta.textContent = `${payload.totalRows.toLocaleString()} 行 · ${payload.columns.length} 个字段`;
+                tableHeader.innerHTML = '<th>#</th>';
+                payload.columns.forEach((column, index) => {
+          const th = document.createElement('th');
+                                        const columnType = columnTypes[index] || '';
+                                        const columnLabel = columnType ? `${column} (${columnType})` : column;
+                    th.textContent = columnLabel;
+                                        const primaryKeyOrder = columnPrimaryKeys[index] || 0;
+                                        if (primaryKeyOrder > 0) {
+                                            const badge = document.createElement('span');
+                                            badge.className = 'pk-badge';
+                                            badge.textContent = primaryKeyCount > 1 ? `PK${primaryKeyOrder}` : 'PK';
+                                            th.appendChild(badge);
+                                            th.title = `${columnLabel} · 主键${primaryKeyCount > 1 ? `（顺序 ${primaryKeyOrder}）` : ''}`;
+                                        } else {
+                                            th.title = columnLabel;
+                                        }
+          tableHeader.appendChild(th);
+        });
+                tableBody.innerHTML = '';
+                payload.rows.forEach((row, rowIndex) => {
+                    const zstdFlags = (payload.zstdDecompressed || [])[rowIndex] || [];
+                    const blobFlags = (payload.blobHexEncoded || [])[rowIndex] || [];
+                    const tr = document.createElement('tr');
+                    const indexCell = document.createElement('td');
+                    indexCell.textContent = (payload.page - 1) * payload.pageSize + rowIndex + 1;
+                    tr.appendChild(indexCell);
+                    row.forEach((value, columnIndex) => {
+                        const td = document.createElement('td');
+                        td.textContent = value;
+                        if (zstdFlags[columnIndex]) {
+                            td.classList.add('zstd-decompressed');
+                            td.title = `Zstd 已解压\n${value}`;
+                        } else if (blobFlags[columnIndex]) {
+                            td.classList.add('blob-hex');
+                            td.title = `BLOB 十六进制\n${value}`;
+                        } else {
+                            td.title = value;
+                        }
+                        tr.appendChild(td);
+                    });
+                    tableBody.appendChild(tr);
+        });
+                emptyState.style.display = payload.rows.length ? 'none' : 'block';
+                const pages = totalPages();
+                firstBtn.disabled = prevBtn.disabled = payload.page <= 1;
+                nextBtn.disabled = lastBtn.disabled = payload.page >= pages;
+                pageInput.value = payload.page;
+                pageTotal.textContent = `/ ${pages} 页`;
+                document.getElementById('fieldCount').textContent = `${payload.columns.length} 个字段`;
+                document.getElementById('rowCount').textContent = `${payload.totalRows.toLocaleString()} 行`;
+                statusText.textContent = '就绪';
+                statusText.className = 'ready';
+                renderTableList();
+            } catch (error) {
+                statusText.textContent = `读取失败：${error.message}`;
+                statusText.className = '';
+            } finally {
+                state.loading = false;
+            }
+    }
+
+        document.getElementById('refreshBtn').addEventListener('click', loadDatabases);
+        document.getElementById('sideRefreshBtn').addEventListener('click', loadDatabases);
+        databaseSelect.addEventListener('change', () => {
+            state.database = databaseSelect.value;
+            state.selected = '';
+            state.page = 1;
+            renderDatabases();
+            loadTables();
+        });
+        document.getElementById('reloadDataBtn').addEventListener('click', () => loadTable(state.selected, state.page));
+        document.getElementById('tableSearch').addEventListener('input', renderTableList);
+        firstBtn.addEventListener('click', () => loadTable(state.selected, 1));
+    prevBtn.addEventListener('click', () => {
+      if (state.page > 1) {
+        loadTable(state.selected, state.page - 1);
+      }
+    });
+    nextBtn.addEventListener('click', () => {
+            if (state.page < totalPages()) loadTable(state.selected, state.page + 1);
+        });
+        lastBtn.addEventListener('click', () => loadTable(state.selected, totalPages()));
+        pageInput.addEventListener('change', () => {
+            const page = Math.min(totalPages(), Math.max(1, Number.parseInt(pageInput.value, 10) || 1));
+            loadTable(state.selected, page);
+        });
+        document.getElementById('pageSize').addEventListener('change', (event) => {
+            state.pageSize = Number.parseInt(event.target.value, 10);
+            state.page = 1;
+            loadTable(state.selected, 1);
+    });
+
+    loadDatabases();
+  </script>
+</body>
+</html>

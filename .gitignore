@@ -1,0 +1,55 @@
+# Build and dependency state
+.deps/
+.xmake/
+build/
+compile_commands.json
+.vscode/.cache/
+.vscode/compile_commands.json
+__pycache__/
+*.py[cod]
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+*.obj
+*.pdb
+*.ilk
+*.exe
+*.dll
+*.lib
+
+# Local configuration and secrets
+.env
+.env.*
+*.key
+*.pem
+*.pfx
+*.p12
+*.credentials
+
+# Raw databases and sidecars are private by default.
+*.db
+*.db-*
+*.sqlite
+*.sqlite3
+*.sqlite-wal
+*.sqlite-shm
+*.kvdb
+*.kvdb-*
+*.mmkv
+*.mmkv.crc
+*.material
+
+# Private Weixin data. Keep the boundary README only.
+db-storage/
+db_storage_copy/
+local-data/db-storage/
+local-data/*
+!local-data/README.md
+
+# Standalone research-suite local state and sensitive captures
+research/weixin-db/.deps/
+research/weixin-db/.tools/
+research/weixin-db/build/
+research/weixin-db/artifacts/exports/
+research/weixin-db/artifacts/logs/
+
