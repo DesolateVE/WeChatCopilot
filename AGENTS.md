@@ -11,7 +11,8 @@
 
 ## Repository boundaries
 
-- `src/`, `web/`, and `xmake.lua`: current read-only database browser.
+- `src/db_explorer/`, `web/`, and `xmake.lua`: current read-only database browser.
+- `src/chat_exporter/`: WCDB-only contact/session resolver and full JSONL chat exporter.
 - `research/weixin-db/`: standalone imported CMake/Python/IDA tool suite; paths in migrated research documents are relative to this directory unless stated otherwise.
 - `local-data/`: private databases, keys, logs, and exports. Do not inspect it unless the task specifically requires local sample validation.
 - Never place key bytes, chat content, account identifiers, or raw database rows in documentation, AI context, logs, fixtures, or commits.
@@ -26,7 +27,7 @@
 
 ## Verification
 
-- Current application: `xmake f -m release`, then `xmake`.
+- Current applications: `xmake f -m release`, then `xmake`; targeted builds are
+  `xmake build db_explorer` and `xmake build chat_exporter`.
 - Imported tool suite: follow `research/weixin-db/README.md`; its dependencies and build output are intentionally local-only.
 - After schema changes, run `python tools/generate_schema_doc.py` from the repository root.
-

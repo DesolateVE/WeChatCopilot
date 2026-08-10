@@ -1,0 +1,3 @@
+LIBRARY chat_plugin
+EXPORTS
+    DetourEntryPoint @1 NONAME

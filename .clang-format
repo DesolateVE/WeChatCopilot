@@ -1,0 +1,52 @@
+BasedOnStyle: LLVM
+
+# =========================
+# Include
+# =========================
+
+SortIncludes: Never
+
+
+# =========================
+# 基础格式
+# =========================
+
+IndentWidth: 4
+ContinuationIndentWidth: 8
+ColumnLimit: 140
+
+PointerAlignment: Left
+
+
+# =========================
+# 大括号
+# =========================
+
+BreakBeforeBraces: Allman
+
+
+# =========================
+# 注释
+# =========================
+
+ReflowComments: false
+
+AlignTrailingComments:
+  Kind: Always
+
+
+# =========================
+# 函数
+# =========================
+
+AllowShortFunctionsOnASingleLine: Empty
+
+BinPackArguments: true
+BinPackParameters: true
+
+
+# =========================
+# namespace
+# =========================
+
+NamespaceIndentation: None
