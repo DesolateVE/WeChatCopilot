@@ -28,10 +28,11 @@ ExportResult createEmptyExport(const std::string &name,
 WCDB::StatementSelect selectAllWhere(const char *tableName,
                                      const char *columnName, int parameter = 1);
 
-ExportResult exportMessages(ReadOnlyDatabase &database, const std::string &name,
-                            const std::string &username, bool isGroup,
-                            const std::string &messageTable,
-                            const std::filesystem::path &outputDirectory);
+ExportResult exportMessages(
+    ReadOnlyDatabase &database, const std::string &name,
+    const std::string &username, bool isGroup, const std::string &messageTable,
+    const std::filesystem::path &outputDirectory,
+    const std::function<void(nlohmann::json &)> &augment = {});
 
 void writeManifest(const Options &options, const ContactMatch &contact,
                    bool isGroup, const std::string &messageTable,

@@ -138,7 +138,7 @@ void InitPluginServer()
             []()
             {
                 OutputDebugStringA("Starting plugin server on port 6500...");
-                g_pluginServer.listen("127.0.0.0", 6500);
+                g_pluginServer.listen("127.0.0.1", 6500);
             })
             .detach();
 }
@@ -153,6 +153,8 @@ BOOL WINAPI DllMain(HINSTANCE instance, DWORD reason, LPVOID)
     if (reason == DLL_PROCESS_ATTACH)
     {
         OutputDebugStringA("chat_plugin.dll loaded, installing hooks...");
+
+        InitPluginServer();
 
         DisableThreadLibraryCalls(instance);
         DetourRestoreAfterWith();

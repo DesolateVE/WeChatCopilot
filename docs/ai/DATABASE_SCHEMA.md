@@ -1,7 +1,7 @@
 # WeChat DB AI Context
 
 PURPOSE: compact retrieval context for AI; not a developer tutorial.
-SOURCE: current snapshot sqlite_master + PRAGMA table_info. Meanings use external guide only as non-authoritative evidence.
+SOURCE: current snapshot sqlite_master + PRAGMA table_info. Semantic guidance: docs/DATABASES.md.
 CONFIDENCE: V=sample/reference verified; N=name inference; U=unknown. Never present N/U as fact.
 
 ## HARD_CONSTRAINTS

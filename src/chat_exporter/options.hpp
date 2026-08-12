@@ -7,7 +7,7 @@ namespace wechat::chat_exporter {
 
 struct Options {
   std::filesystem::path databaseDirectory;
-  std::filesystem::path keyRecord;
+  std::string keyHex;
   std::string query;
   std::string selectedUsername;
   std::filesystem::path outputDirectory;

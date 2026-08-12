@@ -6,27 +6,15 @@
 
 #include "utility.hpp"
 
-#include <nlohmann/json.hpp>
-
 #include <array>
 #include <cstdlib>
 #include <ctime>
-#include <fstream>
 #include <iomanip>
 #include <sstream>
 #include <stdexcept>
 
 namespace wechat::chat_exporter {
 namespace {
-
-std::string readFile(const std::filesystem::path &path) {
-  std::ifstream input(path, std::ios::binary);
-  if (!input) {
-    throw std::runtime_error("cannot open file: " + pathUtf8(path));
-  }
-  return std::string(std::istreambuf_iterator<char>(input),
-                     std::istreambuf_iterator<char>());
-}
 
 std::vector<unsigned char> decodeKeyHex(const std::string &hex) {
   if (hex.size() != 64) {
@@ -87,17 +75,13 @@ std::string wideToUtf8(const std::wstring_view value) {
 }
 
 std::vector<unsigned char> loadKey(const Options &options) {
-  if (!options.keyRecord.empty()) {
-    const auto document = nlohmann::json::parse(readFile(options.keyRecord));
-    if (!document.contains("key_hex") || !document.at("key_hex").is_string()) {
-      throw std::runtime_error("key record has no string key_hex field");
-    }
-    return decodeKeyHex(document.at("key_hex").get<std::string>());
+  if (!options.keyHex.empty()) {
+    return decodeKeyHex(options.keyHex);
   }
   const char *keyHex = std::getenv("WECHAT_DB_KEY_HEX");
   if (keyHex == nullptr || *keyHex == '\0') {
     throw std::runtime_error(
-        "set WECHAT_DB_KEY_HEX or pass --key-record <key.json>");
+        "set WECHAT_DB_KEY_HEX or pass --key-record <key>");
   }
   return decodeKeyHex(keyHex);
 }

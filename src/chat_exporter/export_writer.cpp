@@ -87,10 +87,12 @@ WCDB::StatementSelect selectAllWhere(const char *tableName,
       .where(column(columnName) == WCDB::BindParameter(parameter));
 }
 
-ExportResult exportMessages(ReadOnlyDatabase &database, const std::string &name,
-                            const std::string &username, const bool isGroup,
-                            const std::string &messageTable,
-                            const std::filesystem::path &outputDirectory) {
+ExportResult exportMessages(
+    ReadOnlyDatabase &database, const std::string &name,
+    const std::string &username, const bool isGroup,
+    const std::string &messageTable,
+    const std::filesystem::path &outputDirectory,
+    const std::function<void(nlohmann::json &)> &augment) {
   if (!database.tableExists(messageTable)) {
     return createEmptyExport(name, outputDirectory);
   }
@@ -124,6 +126,9 @@ ExportResult exportMessages(ReadOnlyDatabase &database, const std::string &name,
           row["create_time_utc"] =
               value.empty() ? nlohmann::json(nullptr) : nlohmann::json(value);
         }
+        if (augment) {
+          augment(row);
+        }
       });
 }
 
@@ -141,7 +146,7 @@ void writeManifest(const Options &options, const ContactMatch &contact,
     });
   }
   const nlohmann::json manifest{
-      {"format_version", 1},
+      {"format_version", 2},
       {"read_only", true},
       {"query", options.query},
       {"resolved_contact",
