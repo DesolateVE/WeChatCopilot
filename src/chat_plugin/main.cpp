@@ -1,13 +1,17 @@
 #define NOMINMAX
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
+#include <algorithm>
 #include <atomic>
-#include <vector>
+#include <cstdint>
 #include <string>
 #include <thread>
+#include <vector>
 
 #include <detours/detours.h>
 #include <httplib.h>
+
+#include "versions.hpp"
 
 struct WCDB_Data
 {
@@ -31,6 +35,72 @@ std::vector<uint8_t> g_weixinKeyBytes;
 httplib::Server g_pluginServer;
 
 extern "C" void DetourEntryPoint() {}
+
+std::string GetModuleFileVersion(HMODULE module)
+{
+    std::vector<wchar_t> modulePath(32768);
+    const DWORD pathLength =
+            GetModuleFileNameW(module, modulePath.data(), static_cast<DWORD>(modulePath.size()));
+    if (pathLength == 0 || pathLength == modulePath.size())
+    {
+        return {};
+    }
+
+    DWORD ignored = 0;
+    const DWORD versionInfoSize = GetFileVersionInfoSizeW(modulePath.data(), &ignored);
+    if (versionInfoSize == 0)
+    {
+        return {};
+    }
+
+    std::vector<uint8_t> versionInfo(versionInfoSize);
+    if (!GetFileVersionInfoW(modulePath.data(), 0, versionInfoSize, versionInfo.data()))
+    {
+        return {};
+    }
+
+    VS_FIXEDFILEINFO* fixedInfo = nullptr;
+    UINT fixedInfoSize = 0;
+    if (!VerQueryValueW(versionInfo.data(), L"\\", reinterpret_cast<void**>(&fixedInfo), &fixedInfoSize)
+        || fixedInfo == nullptr || fixedInfoSize < sizeof(VS_FIXEDFILEINFO)
+        || fixedInfo->dwSignature != 0xFEEF04BD)
+    {
+        return {};
+    }
+
+    return std::to_string(HIWORD(fixedInfo->dwFileVersionMS)) + "."
+           + std::to_string(LOWORD(fixedInfo->dwFileVersionMS)) + "."
+           + std::to_string(HIWORD(fixedInfo->dwFileVersionLS)) + "."
+           + std::to_string(LOWORD(fixedInfo->dwFileVersionLS));
+}
+
+bool MatchesSetCipherKeySignature(HMODULE module, uintptr_t rva)
+{
+    const auto base = reinterpret_cast<uintptr_t>(module);
+    const auto* dosHeader = reinterpret_cast<const IMAGE_DOS_HEADER*>(base);
+    if (dosHeader->e_magic != IMAGE_DOS_SIGNATURE || dosHeader->e_lfanew <= 0)
+    {
+        return false;
+    }
+
+    const auto* ntHeaders = reinterpret_cast<const IMAGE_NT_HEADERS*>(base + dosHeader->e_lfanew);
+    if (ntHeaders->Signature != IMAGE_NT_SIGNATURE || rva > ntHeaders->OptionalHeader.SizeOfImage
+        || SetCipherKeyEntrySignature.size() > ntHeaders->OptionalHeader.SizeOfImage - rva)
+    {
+        return false;
+    }
+
+    const auto* code = reinterpret_cast<const uint8_t*>(base + rva);
+    for (size_t index = 0; index < SetCipherKeyEntrySignature.size(); ++index)
+    {
+        const int16_t expected = SetCipherKeyEntrySignature[index];
+        if (expected >= 0 && code[index] != static_cast<uint8_t>(expected))
+        {
+            return false;
+        }
+    }
+    return true;
+}
 
 void __fastcall HookSetCipherKey(void* database, const WCDB_Data* keyData, int pageSize, int cipherVersion)
 {
@@ -65,20 +135,74 @@ void __fastcall HookSetCipherKey(void* database, const WCDB_Data* keyData, int p
 
 bool InstallWeixinHook(HMODULE module)
 {
+    const std::string version = GetModuleFileVersion(module);
+    if (version.empty())
+    {
+        OutputDebugStringA("Unable to read the loaded Weixin.dll version; refusing to install the hook.");
+        return false;
+    }
+
+    const WechatFunctionOffset* functions = FindWechatFunctionOffsets(version);
+    if (functions == nullptr)
+    {
+        const std::string message = "Unsupported Weixin.dll version " + version
+                                    + "; refusing to install the hook.";
+        OutputDebugStringA(message.c_str());
+        return false;
+    }
+
+    if (!MatchesSetCipherKeySignature(module, functions->setCipherKeyOffset))
+    {
+        const std::string message = "SetCipherKey signature mismatch for Weixin.dll " + version
+                                    + "; refusing to install the hook.";
+        OutputDebugStringA(message.c_str());
+        return false;
+    }
+
     bool expected = false;
     if (!g_weixinHookInstalled.compare_exchange_strong(expected, true))
     {
         return true;
     }
 
-    constexpr uintptr_t kSetCipherKeyRva = 0x5DBF40;
-    RealSetCipherKey = reinterpret_cast<SetCipherKeyFn>(reinterpret_cast<uintptr_t>(module) + kSetCipherKeyRva);
+    RealSetCipherKey = reinterpret_cast<SetCipherKeyFn>(reinterpret_cast<uintptr_t>(module)
+                                                        + functions->setCipherKeyOffset);
 
-    DetourTransactionBegin();
-    DetourUpdateThread(GetCurrentThread());
-    DetourAttach(reinterpret_cast<PVOID*>(&RealSetCipherKey), reinterpret_cast<PVOID>(HookSetCipherKey));
-    DetourTransactionCommit();
+    LONG error = DetourTransactionBegin();
+    if (error != NO_ERROR)
+    {
+        RealSetCipherKey = nullptr;
+        g_weixinHookInstalled.store(false);
+        OutputDebugStringA("Failed to begin the SetCipherKey hook transaction.");
+        return false;
+    }
 
+    error = DetourUpdateThread(GetCurrentThread());
+    if (error == NO_ERROR)
+    {
+        error = DetourAttach(reinterpret_cast<PVOID*>(&RealSetCipherKey),
+                             reinterpret_cast<PVOID>(HookSetCipherKey));
+    }
+    if (error != NO_ERROR)
+    {
+        DetourTransactionAbort();
+        RealSetCipherKey = nullptr;
+        g_weixinHookInstalled.store(false);
+        OutputDebugStringA("Failed to prepare the SetCipherKey hook transaction.");
+        return false;
+    }
+
+    error = DetourTransactionCommit();
+    if (error != NO_ERROR)
+    {
+        RealSetCipherKey = nullptr;
+        g_weixinHookInstalled.store(false);
+        OutputDebugStringA("Failed to commit the SetCipherKey hook transaction.");
+        return false;
+    }
+
+    const std::string message = "SetCipherKey hook installed for Weixin.dll " + version + ".";
+    OutputDebugStringA(message.c_str());
     return true;
 }
 

@@ -42,6 +42,7 @@ target("chat_plugin")
     add_packages("vcpkg::detours", "cpp-httplib")
     add_files("src/chat_plugin/*.cpp")
     add_files("src/chat_plugin/chat_plugin.def")
+    add_syslinks("Version")
     
 target("chat_launcher")
     set_kind("binary")

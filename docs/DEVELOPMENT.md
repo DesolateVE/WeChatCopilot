@@ -11,7 +11,7 @@ src/chat_exporter/  会话解析与 JSONL 导出
 src/chat_launcher/  使用 Detours 启动并注入微信
 src/chat_plugin/    WCDB key 捕获 DLL
 web/                db_explorer 的单页前端
-tools/              Schema 文档生成工具
+tools/              Schema 文档生成和 Weixin.dll 离线定位工具
 docs/ai/            自动生成的 Schema 索引和机器 JSON
 local-data/         本机私有数据；除 README 外均忽略
 ```
@@ -108,16 +108,34 @@ xmake run chat_launcher -- 'C:\path\to\Weixin.exe'
 插件当前行为：
 
 1. Hook `LoadLibraryExW`，等待 `Weixin.dll` 完成加载。
-2. 在 `Weixin.dll + 0x5DBF40` 安装 `SetCipherKey` Hook。
-3. 保存首次观察到的 WCDB key 字节，然后移除该 Hook。
-4. 仅在 `127.0.0.1:6500` 提供：
+2. 读取已加载模块的文件版本，并从版本表选择 `SetCipherKey` RVA。
+3. 校验目标函数入口签名；未知版本或签名不符时拒绝安装 Hook。
+4. 保存首次观察到的 WCDB key 字节，然后移除该 Hook。
+5. 仅在 `127.0.0.1:6500` 提供：
    - `GET /key/string`：64 位十六进制字符串；
    - `GET /key/bytes`：32 字节二进制数据。
 
-该 RVA 和 `WCDB_Data` 布局仅在微信 `4.1.12.26` 上确认。当前实现没有在注入前自动验证
-微信版本，也不会区分首次 key 属于哪个数据库；升级后或首次打开顺序变化时必须先按
-[逆向参考](REVERSE_ENGINEERING.md#wcdb-密钥边界) 重新验证。key 会保留在目标进程内存中，
-HTTP 响应也属于敏感数据。
+当前版本表：
+
+| 微信版本 | `SetCipherKey` RVA | 证据状态 |
+|---|---:|---|
+| `4.1.12.26` | `0x5DBF40` | 静态定位 + 动态 key/数据库验证 |
+| `4.1.13.12` | `0x5ECD00` | 静态锚点、内部语义片段和 `.pdata` 函数边界验证 |
+
+`4.1.13.12` 尚未在本文中提升为动态确认；`WCDB_Data` 布局、页大小和 compatibility
+沿用旧版结论，实际使用前仍应按[逆向参考](REVERSE_ENGINEERING.md#wcdb-密钥边界)观察
+参数并用只读数据库交叉验证。插件也不会区分首次 key 属于哪个数据库；首次打开顺序变化
+时仍需确认。key 会保留在目标进程内存中，HTTP 响应也属于敏感数据。
+
+升级微信后可先运行无第三方依赖的离线定位器：
+
+```powershell
+python tools/locate_weixin_set_cipher_key.py 'C:\path\to\Weixin.dll'
+```
+
+只有入口、配置对象构造、配置安装、配置移除四个模式均为单一命中，落在同一 `.pdata`
+函数边界，且 Cipher 配置名与全局配置键交叉引用一致时，脚本才输出候选 RVA。该结果仍
+不能替代动态参数和数据库验证。
 
 ## 修改与验证
 
@@ -144,6 +162,7 @@ python tools/generate_schema_doc.py
 ## 维护约束
 
 - 微信版本变化后重新验证 RVA、对象布局、页大小、兼容级别、表结构和压缩标记。
+- 新增插件版本时同步更新 `src/chat_plugin/versions.hpp` 和逆向证据，不能只改硬编码 RVA。
 - 跨库不得直接连接数字 ID；先转换为 `username` 或 `user_name`。
 - `docs/ai/DATABASE_SCHEMA.md` 是生成文件，不手工编辑；修改生成逻辑后重新运行脚本。
 - 不把真实 key、账号标识、聊天正文、数据库行或调试转储写入源码、文档、测试或提交。
