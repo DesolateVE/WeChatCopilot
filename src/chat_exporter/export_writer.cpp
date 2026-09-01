@@ -132,7 +132,8 @@ ExportResult exportMessages(
       });
 }
 
-void writeManifest(const Options &options, const ContactMatch &contact,
+void writeManifest(const std::filesystem::path &outputDirectory,
+                   const ContactMatch &contact,
                    const bool isGroup, const std::string &messageTable,
                    const std::vector<ExportResult> &exports) {
   int64_t totalRows = 0;
@@ -148,7 +149,7 @@ void writeManifest(const Options &options, const ContactMatch &contact,
   const nlohmann::json manifest{
       {"format_version", 2},
       {"read_only", true},
-      {"query", options.query},
+      {"query", contact.username},
       {"resolved_contact",
        {
            {"username", contact.username},
@@ -161,7 +162,7 @@ void writeManifest(const Options &options, const ContactMatch &contact,
       {"total_exported_rows", totalRows},
       {"files", files},
   };
-  std::ofstream output(options.outputDirectory / "manifest.json",
+  std::ofstream output(outputDirectory / "manifest.json",
                        std::ios::binary);
   if (!output) {
     throw std::runtime_error("cannot create manifest.json");

@@ -1,13 +1,16 @@
 #define NOMINMAX
+#define WIN32_LEAN_AND_MEAN
 // clang-format off: bcrypt.h depends on Windows base types.
 #include <windows.h>
 #include <bcrypt.h>
+#include <wincrypt.h>
 // clang-format on
 
 #include "utility.hpp"
 
+#include <httplib.h>
+
 #include <array>
-#include <cstdlib>
 #include <ctime>
 #include <iomanip>
 #include <sstream>
@@ -55,33 +58,28 @@ std::string pathUtf8(const std::filesystem::path &path) {
   return std::string(value.begin(), value.end());
 }
 
-std::string wideToUtf8(const std::wstring_view value) {
-  if (value.empty()) {
-    return {};
-  }
-  const int size = WideCharToMultiByte(
-      CP_UTF8, WC_ERR_INVALID_CHARS, value.data(),
-      static_cast<int>(value.size()), nullptr, 0, nullptr, nullptr);
-  if (size <= 0) {
-    throw std::runtime_error("cannot convert command line to UTF-8");
-  }
-  std::string converted(static_cast<size_t>(size), '\0');
-  if (WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, value.data(),
-                          static_cast<int>(value.size()), converted.data(),
-                          size, nullptr, nullptr) != size) {
-    throw std::runtime_error("cannot convert command line to UTF-8");
-  }
-  return converted;
-}
-
-std::vector<unsigned char> loadKey(const Options &options) {
-  if (!options.keyHex.empty()) {
-    return decodeKeyHex(options.keyHex);
-  }
-  const char *keyHex = std::getenv("WECHAT_DB_KEY_HEX");
-  if (keyHex == nullptr || *keyHex == '\0') {
+std::vector<unsigned char> loadKeyFromPlugin() {
+  httplib::Client client("127.0.0.1", 6500);
+  client.set_connection_timeout(2, 0);
+  client.set_read_timeout(3, 0);
+  const auto response = client.Get("/key/string");
+  if (!response) {
     throw std::runtime_error(
-        "set WECHAT_DB_KEY_HEX or pass --key-record <key>");
+        "cannot connect to http://127.0.0.1:6500/key/string; start Weixin "
+        "through chat_launcher and wait for the key to be captured");
+  }
+  if (response->status != 200) {
+    throw std::runtime_error(
+        "key service returned HTTP " + std::to_string(response->status) +
+        "; wait until Weixin opens an encrypted database");
+  }
+  std::string keyHex = response->body;
+  const auto first = keyHex.find_first_not_of(" \t\r\n");
+  const auto last = keyHex.find_last_not_of(" \t\r\n");
+  if (first == std::string::npos) {
+    keyHex.clear();
+  } else {
+    keyHex = keyHex.substr(first, last - first + 1);
   }
   return decodeKeyHex(keyHex);
 }

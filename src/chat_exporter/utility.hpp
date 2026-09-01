@@ -1,7 +1,5 @@
 #pragma once
 
-#include "options.hpp"
-
 #include <filesystem>
 #include <string>
 #include <string_view>
@@ -21,8 +19,7 @@ private:
 };
 
 std::string pathUtf8(const std::filesystem::path &path);
-std::string wideToUtf8(std::wstring_view value);
-std::vector<unsigned char> loadKey(const Options &options);
+std::vector<unsigned char> loadKeyFromPlugin();
 std::string md5Hex(std::string_view value);
 std::string timestamp();
 bool endsWith(const std::string &value, std::string_view suffix);

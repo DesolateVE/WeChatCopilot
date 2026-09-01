@@ -48,16 +48,18 @@ xmake run db_explorer
 
 ## 导出会话
 
-`chat_exporter` 可按 `username`、`alias`、`remark` 或 `nick_name` 解析会话：
+先通过 `chat_launcher` 启动微信并让插件捕获 key，再把完整数据库快照放到程序工作目录的
+`db_storage/` 下。`chat_exporter` 只接收账号数据根目录，并在其中自动找到数据库目录；
+启动后会列出存在消息表的联系人和群聊：
 
 ```powershell
-$env:WECHAT_DB_KEY_HEX = '<64 位十六进制 WCDB key>'
-$env:WECHAT_DB_DIR = (Resolve-Path '.\local-data\db-storage').Path
-xmake run chat_exporter -- '<查询值>'
+xmake run chat_exporter -- 'C:\Users\Administrator\Documents\xwechat_files\wxid_xxx_0000'
 ```
 
-输出默认写入 `local-data/exports/`，只包含消息 JSONL 和 manifest；可关联的图片、
-语音、视频及文件信息会嵌入消息。参数、重名选择和字段说明见
+控制台使用全屏交互界面，可实时搜索备注、显示名、微信号或内部用户名，并在右侧查看
+联系人详情；选中会话后按 `Enter` 开始导出。结果写入同一 `db-storage/` 下的独立时间戳
+目录，只包含消息 JSONL 和 manifest；可关联的图片、语音、
+视频及文件信息会嵌入消息。目录布局、选择方式和字段说明见
 [聊天导出器](docs/CHAT_EXPORTER.md)。
 
 ## 文档
@@ -76,3 +78,23 @@ xmake run chat_exporter -- '<查询值>'
 - 不提交 key、聊天正文、账号标识、原始数据库、WAL/SHM、日志或导出物。
 - `chat_plugin` 会把 key 暂存在微信进程内存并暴露给本机端口，只应在受控环境使用。
 - 字段名推测不是事实；未经过样本或调用链验证的语义必须标为推测或未知。
+
+## 使用
+
+```powershell
+.\chat_launcher.exe '\xxxx\Weixin.exe'   # 运行密钥捕获程序，会自动拉起微信，登陆完成再执行导出程序
+.\chat_exporter.exe 'C:\Users\xxxx\Documents\xwechat_files\wxid_xxxx'   # 导出指定账号的聊天记录
+```
+
+## 软件界面
+
+<img src="docs/res/chat_exporter.png" width="800" alt="chat_exporter UI" />
+
+## 待做事项
+
+- [ ] 图片、视频、语音和文件等消息的完整导出，当前只嵌入关联信息。
+- [ ] 导出格式整理，当前只输出原始 JSONL，且没有对消息正文、时间戳、发送者和接收者做统一处理。
+
+## 免责声明
+
+仅用于本地研究和学习，禁止用于任何商业或非法用途。请遵守当地法律法规，保护个人隐私和数据安全。

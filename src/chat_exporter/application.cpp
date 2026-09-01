@@ -1,6 +1,7 @@
 #include "application.hpp"
 
 #include "contact_resolver.hpp"
+#include "console_ui.hpp"
 #include "database.hpp"
 #include "export_writer.hpp"
 #include "message_enricher.hpp"
@@ -24,51 +25,43 @@ namespace wechat::chat_exporter
 
 int run(const Options& options)
 {
-    std::vector<unsigned char> key = loadKey(options);
+    std::cout << "WeChat 聊天记录导出器\n"
+              << "数据库目录：" << pathUtf8(std::filesystem::absolute(options.databaseDirectory)) << "\n"
+              << "正在从 http://127.0.0.1:6500/key/string 获取密钥...\n";
+
+    std::vector<unsigned char> key = loadKeyFromPlugin();
     const KeyWiper keyWiper(key);
+    std::cout << "密钥已获取，正在读取可导出会话...\n";
 
     ReadOnlyDatabase contactDb(options.databaseDirectory / "contact" / "contact.db", key);
-    auto matches = findContacts(contactDb, options.query);
-    std::optional<ContactMatch> fallback;
-    if (matches.empty())
+    ReadOnlyDatabase messageDb(options.databaseDirectory / "message" / "message_0.db", key, true);
+    const auto contacts = listExportableContacts(contactDb, messageDb);
+    const std::optional<ContactMatch> selected = selectExportContact(contacts);
+    if (!selected.has_value())
     {
-        ReadOnlyDatabase messageDb(options.databaseDirectory / "message" / "message_0.db", key, true);
-        const auto statement = WCDB::StatementSelect()
-                                       .select({WCDB::Column::rowid(), column("user_name")})
-                                       .from("Name2Id")
-                                       .where(column("user_name") == WCDB::BindParameter() && column("is_session") != 0)
-                                       .limit(1);
-        messageDb.forEach(statement, {options.query},
-                          [&](WCDB::Handle& handle)
-                          {
-                              ContactMatch match;
-                              match.id = handle.getInteger(0);
-                              match.username = textAt(handle, 1);
-                              match.priority = 0;
-                              fallback = std::move(match);
-                          });
-        if (!fallback.has_value())
-        {
-            throw std::runtime_error("no contact or message session matches the query");
-        }
-        matches.push_back(*fallback);
+        std::cout << "已取消导出。\n";
+        return 0;
     }
 
-    const ContactMatch contact = chooseContact(matches, options.query, options.selectedUsername);
+    const ContactMatch& contact = *selected;
     bool isGroup = endsWith(contact.username, "@chatroom");
     if (!isGroup && contactDb.tableExists("chat_room"))
     {
         contactDb.forEach(selectAllWhere("chat_room", "username"), {contact.username}, [&](WCDB::Handle&) { isGroup = true; });
     }
 
-    ensureFreshOutputDirectory(options.outputDirectory);
+    const std::filesystem::path outputDirectory =
+            options.outputRootDirectory /
+            std::filesystem::u8path("chat_export_" + md5Hex(contact.username) + "_" + timestamp());
+    ensureFreshOutputDirectory(outputDirectory);
+    std::cout << "\n开始导出到：" << pathUtf8(std::filesystem::absolute(outputDirectory)) << "\n";
+
     const std::string messageTable = "Msg_" + md5Hex(contact.username);
     const MessageEnricher enricher(options.databaseDirectory, key, contact.username);
     const auto augment = [&](nlohmann::json& message) { enricher.augment(message); };
 
     std::vector<ExportResult> exports;
-    ReadOnlyDatabase messageDb(options.databaseDirectory / "message" / "message_0.db", key, true);
-    exports.push_back(exportMessages(messageDb, "messages", contact.username, isGroup, messageTable, options.outputDirectory, augment));
+    exports.push_back(exportMessages(messageDb, "messages", contact.username, isGroup, messageTable, outputDirectory, augment));
 
     const auto bizPath = options.databaseDirectory / "message" / "biz_message_0.db";
     if (std::filesystem::is_regular_file(bizPath))
@@ -77,11 +70,11 @@ int run(const Options& options)
         if (bizDb.tableExists(messageTable))
         {
             exports.push_back(
-                    exportMessages(bizDb, "biz_messages", contact.username, isGroup, messageTable, options.outputDirectory, augment));
+                    exportMessages(bizDb, "biz_messages", contact.username, isGroup, messageTable, outputDirectory, augment));
         }
     }
 
-    writeManifest(options, contact, isGroup, messageTable, exports);
+    writeManifest(outputDirectory, contact, isGroup, messageTable, exports);
     int64_t messageRows = 0;
     int64_t businessMessageRows = 0;
     for (const auto& item : exports)
@@ -101,8 +94,10 @@ int run(const Options& options)
             {"messages", messageRows},
             {"biz_messages", businessMessageRows},
             {"files", exports.size() + 1},
-            {"output", pathUtf8(std::filesystem::absolute(options.outputDirectory))},
+            {"output", pathUtf8(std::filesystem::absolute(outputDirectory))},
     };
+    std::cout << "导出完成：普通消息 " << messageRows << " 条，业务消息 "
+              << businessMessageRows << " 条。\n";
     std::cout << summary.dump() << '\n';
     return 0;
 }

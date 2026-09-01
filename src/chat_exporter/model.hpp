@@ -12,7 +12,6 @@ struct ContactMatch {
   std::string alias;
   std::string remark;
   std::string nickname;
-  int priority = 99;
 };
 
 struct ExportResult {

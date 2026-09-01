@@ -1,69 +1,85 @@
 #include "options.hpp"
-#include "utility.hpp"
 
-#include <cstdlib>
 #include <stdexcept>
+#include <string>
+#include <vector>
 
 namespace wechat::chat_exporter
 {
+namespace
+{
+
+bool isDatabaseStorage(const std::filesystem::path& directory)
+{
+    return std::filesystem::is_regular_file(directory / "contact" / "contact.db")
+           && std::filesystem::is_regular_file(directory / "message" / "message_0.db");
+}
+
+std::filesystem::path findDatabaseStorage(const std::filesystem::path& suppliedPath)
+{
+    std::error_code error;
+    const std::filesystem::path root = std::filesystem::absolute(suppliedPath, error);
+    if (error || !std::filesystem::is_directory(root, error))
+    {
+        throw std::runtime_error("account data directory does not exist");
+    }
+
+    if (root.filename() == "db_storage" && isDatabaseStorage(root))
+    {
+        return root;
+    }
+
+    const std::filesystem::path direct = root / "db_storage";
+    if (isDatabaseStorage(direct))
+    {
+        return direct;
+    }
+
+    std::vector<std::filesystem::path> matches;
+    const auto options = std::filesystem::directory_options::skip_permission_denied;
+    for (std::filesystem::recursive_directory_iterator iterator(root, options, error), end;
+         iterator != end; iterator.increment(error))
+    {
+        if (error)
+        {
+            error.clear();
+            continue;
+        }
+        if (iterator.depth() >= 4)
+        {
+            iterator.disable_recursion_pending();
+        }
+        if (iterator->is_directory(error) && iterator->path().filename() == "db_storage"
+            && isDatabaseStorage(iterator->path()))
+        {
+            matches.push_back(iterator->path());
+            iterator.disable_recursion_pending();
+        }
+    }
+
+    if (matches.empty())
+    {
+        throw std::runtime_error(
+                "cannot find db_storage containing contact/contact.db and message/message_0.db");
+    }
+    if (matches.size() != 1)
+    {
+        throw std::runtime_error("multiple valid db_storage directories found; pass the exact db_storage path");
+    }
+    return matches.front();
+}
+
+} // namespace
 
 Options parseOptions(const int argc, wchar_t* argv[])
 {
-    if (argc < 2)
+    if (argc != 2)
     {
-        throw std::runtime_error("usage: chat_exporter <query> [--db-dir <path>] "
-                                 "[--key-record <key>] [--output <directory>] "
-                                 "[--select-username <username>]");
+        throw std::runtime_error("usage: chat_exporter <account-data-directory-or-db_storage>");
     }
-    Options options;
-    options.query = wideToUtf8(argv[1]);
-    if (options.query.empty() || options.query.starts_with("--"))
-    {
-        throw std::runtime_error("the first argument must be a non-empty query value");
-    }
-    if (const char* directory = std::getenv("WECHAT_DB_DIR"))
-    {
-        options.databaseDirectory = std::filesystem::u8path(directory);
-    }
-    else
-    {
-        options.databaseDirectory = "local-data/db-storage";
-    }
-    for (int index = 2; index < argc; index += 2)
-    {
-        if (index + 1 >= argc)
-        {
-            throw std::runtime_error("each option requires a value");
-        }
-        const std::wstring name = argv[index];
-        const std::filesystem::path value = argv[index + 1];
-        if (name == L"--db-dir")
-        {
-            options.databaseDirectory = value;
-        }
-        else if (name == L"--key-record")
-        {
-            options.keyHex = wideToUtf8(argv[index + 1]);
-        }
-        else if (name == L"--output")
-        {
-            options.outputDirectory = value;
-        }
-        else if (name == L"--select-username")
-        {
-            options.selectedUsername = wideToUtf8(argv[index + 1]);
-        }
-        else
-        {
-            throw std::runtime_error("unknown option: " + wideToUtf8(name));
-        }
-    }
-    if (options.outputDirectory.empty())
-    {
-        options.outputDirectory = std::filesystem::path("local-data") / "exports" /
-                                  std::filesystem::u8path("chat_export_" + md5Hex(options.query) + "_" + timestamp());
-    }
-    return options;
+    const std::filesystem::path databaseDirectory = findDatabaseStorage(argv[1]);
+    const std::filesystem::path outputRoot = std::filesystem::current_path() / "db-storage";
+    return {databaseDirectory, outputRoot};
 }
 
 } // namespace wechat::chat_exporter

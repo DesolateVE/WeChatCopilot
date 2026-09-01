@@ -2,7 +2,6 @@
 
 #include "database.hpp"
 #include "model.hpp"
-#include "options.hpp"
 
 #include <nlohmann/json.hpp>
 
@@ -34,7 +33,8 @@ ExportResult exportMessages(
     const std::filesystem::path &outputDirectory,
     const std::function<void(nlohmann::json &)> &augment = {});
 
-void writeManifest(const Options &options, const ContactMatch &contact,
+void writeManifest(const std::filesystem::path &outputDirectory,
+                   const ContactMatch &contact,
                    bool isGroup, const std::string &messageTable,
                    const std::vector<ExportResult> &exports);
 

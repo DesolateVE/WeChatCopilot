@@ -90,11 +90,15 @@ python tools/generate_schema_doc.py
 ## 聊天导出器
 
 ```powershell
-xmake run chat_exporter -- '<查询值>'
+xmake run chat_exporter -- 'C:\path\to\xwechat_files\wxid_xxx_0000'
 ```
 
-它和浏览器共享 `WECHAT_DB_KEY_HEX`、`WECHAT_DB_DIR`，但面向单个会话输出 JSONL。
-完整接口见 [CHAT_EXPORTER.md](CHAT_EXPORTER.md)。
+它只接收账号数据根目录（也可直接传 `db_storage`），在其下自动定位包含
+`contact/contact.db` 和 `message/message_0.db` 的 `db_storage`。程序从
+`http://127.0.0.1:6500/key/string` 获取 key，使用工作目录下的 `db-storage/` 作为导出
+根目录。控制台通过 FTXUI 提供搜索、滚动列表和联系人详情，只列出存在 `Msg_*` 表的会话；
+选择后输出单个会话的 JSONL。完整流程见
+[CHAT_EXPORTER.md](CHAT_EXPORTER.md)。
 
 ## 密钥捕获组件
 
@@ -153,7 +157,7 @@ python tools/generate_schema_doc.py
 
 - 所有打开路径保持只读；
 - 错误 key 能明确失败；
-- 路径不能逃逸 `WECHAT_DB_DIR`；
+- 数据库只从传入目录下定位出的 `db_storage/` 读取，导出只写入工作目录的 `db-storage/`；
 - 消息正文和 `source` 的压缩/非压缩分支都能读取；
 - 单聊、群聊和重名联系人都覆盖；
 - 输出目录拒绝覆盖已有内容；

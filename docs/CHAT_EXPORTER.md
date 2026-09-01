@@ -8,56 +8,67 @@
 
 ```powershell
 xmake build chat_exporter
-
-$env:WECHAT_DB_KEY_HEX = '<64 位十六进制 WCDB key>'
-$env:WECHAT_DB_DIR = (Resolve-Path '.\local-data\db-storage').Path
-xmake run chat_exporter -- '<查询值>'
+xmake run chat_exporter -- 'C:\Users\Administrator\Documents\xwechat_files\wxid_xxx_0000'
 ```
 
-完整参数：
+程序只接收一个路径参数，不再接收联系人、key、输出目录等参数，也不读取
+`WECHAT_DB_KEY_HEX` 或 `WECHAT_DB_DIR`。传入路径可以是账号数据根目录，也可以是精确的
+`db_storage` 目录。程序先检查直属的 `db_storage/`，必要时向下有限递归查找，并要求其中
+同时存在 `contact/contact.db` 和 `message/message_0.db`。启动顺序：
+
+1. 用 `chat_launcher` 启动微信，等待 `chat_plugin` 捕获数据库 key；
+2. 把账号目录作为唯一参数启动 `chat_exporter`，从控制台列表选择要导出的联系人或群聊。
+
+插件服务依赖微信进程，因此导出时微信需要保持运行。数据库始终以只读方式打开，但运行中
+的数据库仍可能继续产生新消息；需要严格一致的历史快照时，可先在微信关闭状态复制完整
+`db_storage`（包括 WAL/SHM），再重新通过 launcher 启动微信提供 key，并把复制快照的
+上级目录传给导出器。
+
+导出仍写入程序工作目录下的 `db-storage/`。`xmake run` 默认从目标输出目录运行，因此
+对应目录通常是：
 
 ```text
-chat_exporter <query> [--db-dir <db-storage>] [--key-record <key>]
-              [--output <empty-directory>] [--select-username <username>]
+build/windows/x64/release/db-storage/
 ```
 
-| 参数 | 说明 |
-|---|---|
-| `<query>` | 必填；`username`、`alias`、`remark` 或 `nick_name` |
-| `--db-dir` | 数据库根目录；默认取 `WECHAT_DB_DIR`，再回退到 `local-data/db-storage` |
-| `--key-record` | 直接传入 64 位十六进制 WCDB key；优先于环境变量 |
-| `--output` | 输出目录；必须不存在或为空 |
-| `--select-username` | 非交互场景从重名候选中选择指定 `username` |
-
-未传 `--key-record` 时必须设置 `WECHAT_DB_KEY_HEX`。命令行参数可能被本机进程检查工具
-看到，因此常规使用更推荐环境变量；无论采用哪种方式，都不要把 key 写入脚本或提交。
+直接运行 `chat_exporter.exe` 时，则使用启动它时的当前工作目录。key 只在内存中从
+`http://127.0.0.1:6500/key/string` 读取，不打印、不写入 manifest 或其他文件。
 
 ## 联系人解析
 
-同一个查询值按以下优先级匹配 `contact.db.contact`：
+程序先读取 `message_0.db.sqlite_master` 中实际存在的 `Msg_*` 表，再遍历同库 `Name2Id`，
+用 `Msg_<MD5(username)>` 反查哪些用户名确实有消息表。随后用 `contact.db.contact` 补充：
 
-1. `username`：唯一命中后直接选择；
-2. `alias`：唯一命中后直接选择；
-3. `remark`：可能重名；
-4. `nick_name`：可能重名。
+- `remark`：本地备注；
+- `nick_name`：联系人昵称或群名，作为显示名；
+- `alias`：`nick_name` 为空时的显示名回退；
+- `username`：内部唯一标识，用于区分重名联系人。
 
-同一优先级命中多项时，交互终端显示候选的 `username`、`alias`、`remark` 和
-`nick_name` 并要求选择。自动化调用应使用 `--select-username`，且指定值必须属于本次
-候选集合。
+控制台使用 FTXUI 全屏界面：左侧是可滚动会话列表，右侧显示备注名、显示名、alias、
+username 和会话类型。按 `/` 聚焦搜索框，可按备注、显示名、alias 或 username 实时筛选；
+按 `Tab` 在搜索框和列表间切换，方向键和 `PgUp`/`PgDn` 浏览，`Enter` 导出，`Esc` 或列表
+聚焦时按 `q` 退出。通讯录里没有
+对应记录但确实存在消息表的会话仍会列出，此时备注和显示名可能为空，并保留 username。
 
-联系人表无结果时，工具还会检查 `message_0.db.Name2Id` 中的精确会话映射。群聊首先
-按 `username` 的 `@chatroom` 后缀判断，并用 `chat_room` 表补充确认。
+群聊首先按 `username` 的 `@chatroom` 后缀判断，并用 `chat_room` 表补充确认。
 
 ## 输出目录
 
-默认路径：
+输入数据库位于参数指定范围内的 `db_storage/`，输出位于程序工作目录下的
+`db-storage/`：
 
 ```text
-local-data/exports/chat_export_<MD5(query)>_<YYYYMMDD_HHMMSS>/
+<账号数据目录>/db_storage/
+  contact/contact.db
+  message/message_0.db
+  ...
+
+<程序工作目录>/db-storage/
+  chat_export_<MD5(username)>_<YYYYMMDD_HHMMSS>/
 ```
 
-目录名只包含查询值的摘要，不泄露联系人名称。为避免混合或覆盖旧数据，指定目录必须
-不存在或为空。
+导出目录名只包含 username 摘要，不泄露联系人名称。每次选择都会新建时间戳目录；若
+目录已存在且非空则拒绝覆盖。
 
 消息写入 JSONL，BLOB 使用以下对象保存：
 
@@ -115,9 +126,9 @@ Base64 原样保留，避免错误解码或数据丢失。
 
 常见失败：
 
-- key 不是 64 位十六进制字符串；
+- 插件服务未启动、尚未捕获 key，或返回值不是 64 位十六进制字符串；
 - 数据库目录不完整或 key 与快照不匹配；
-- 查询无匹配，或非交互重名未指定 `--select-username`；
+- 没有任何 `Name2Id` 用户名能对应到实际 `Msg_*` 表；
 - 输出目录非空；
 - 微信升级导致表或压缩配置变化。
 
